@@ -1,0 +1,91 @@
+﻿1.
+
+SELECT  *   
+FROM SPL_STG A  
+WHERE A.source_file not in (SELECT B.source_file FROM SPL B);
+
+2.
+
+with all as (
+SELECT publishers.publisher_account_name,SPL.searchaction
+from publishers 
+join SPL on publishers.gid = SPL.effectiveid
+where SPL.useragent like '%Mozilla%' 
+	and SPL.useragent like '%mozilla%'
+	and SPL.useragent like '%FF%'
+	and SPL.useragent like '%ff%'
+) , filterd as 
+(
+SELECT publisher_account_name , COUNT(publisher_account_name) count_publishers
+FROM all
+
+where searaction = 'Search'
+group by publisher_account_name
+
+)
+select publisher_account_name 
+from filterd 
+where count_publishers > 50 
+
+3.
+select dt_datetime::date as dt, datepart(hour, dt_datetime) as dt_hour_id ,
+(select searchaction from SPL where searchaction = 'Search' or 'AdsSearch') as searches,
+(select searchaction from SPL where searchaction = 'AdsResultClick' or 'SearchResultClick') as Clicks ,
+(select link_type from SPL where link_type = 'SiteLink' or 'Sponsored') as Sponsored clicks ,
+(select link_type from SPL where link_type = '' ) as Organic clicks 
+
+from SPL 
+GROUP BY   datepart(day, dt_datetime), datepart(hour, dt_datetime)
+
+
+4.
+
+with t1 as (
+select *,dense_rank() over(partition by dt order by searches ASC) AS rank 
+from spl
+)
+
+select dt,hour_id,searches,asc_searches 
+from t1 
+where rank = 3 
+
+5.
+
+with t1 as(
+
+select internal.dt,internal.hour_id,internal.device,internal.country_code
+internal.searches as int_searches,internal.clicks as int_clicks,ext.searches as ext_searches,
+ext.clicks as ext_clicks
+
+from internal_data internal
+left join external_data ext
+on internal.hour_id = ext.hour_id 
+
+where internal.searchprovider = '2'
+and external.file_description = 'Bing FeedAdUnit'
+)
+select table1.*,payout.payout , 'provider' as bing 
+from t1 table1
+left join payout 
+on table1.hour_id = payout.hour_id
+
+where payout.search_provider_id = '2'
+
+6.
+
+select dt, search_time ,groupid
+from
+(
+  select search_time, count(gap) over (rows between unbounded preceding and current row) as groupid
+  from
+  (
+    select search_time, case when search_time - lag(search_time) over (order by search_time) > interval '5 minutes' then 1 end as gap
+    from search_session
+  ) times
+) groups
+
+
+
+
+
+
